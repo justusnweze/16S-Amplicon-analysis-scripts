@@ -1,0 +1,1093 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+Writer: Justus Nweze
+chunk_output_type: console
+Date created: 24 March, 2023
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r Load libraries}
+# Load the necessary packages
+library(readODS)
+library(tidyverse)
+library(dplyr)
+library(knitr)
+library(kableExtra)
+library(ggthemes)
+library(RColorBrewer)
+library(vegan)
+
+```
+
+
+
+
+
+```{r Read the files.}
+# 1. Read the files.
+metadata <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Metadata")
+asv <- read_ods("Metadata_ASV_Taxa.ods", sheet = "ASV")
+asv_taxa_filter <- read_ods("Metadata_ASV_Taxa.ods", sheet = "ASV_Taxa_Filter")
+```
+
+
+```{r Normalize}
+# Normalize all ASV for each peat soil sample.
+# normalize the ASV data by dividing each count by the total count for each sample (column-wise)
+asv_norm <- asv
+for (col_name in names(asv_norm)[2:28]) {
+  asv_norm[[col_name]] <- asv_norm[[col_name]] / sum(asv_norm[[col_name]])
+}
+
+# Normalize all ASV for each peat soil sample in asv_taxa_filter using asv sums
+asv_taxa_filter_norm <- asv_taxa_filter
+for (col_name in names(asv_taxa_filter_norm)[2:28]) {
+  asv_taxa_filter_norm[[col_name]] <- asv_taxa_filter_norm[[col_name]] / sum(asv[[col_name]])
+}
+
+#In this script, we first create a copy of the asv_taxa_filter data frame called asv_taxa_filter_norm. Then, we use a for loop to iterate through the column names from Floeg093 to Floeg104. For each column, we divide each element in the asv_taxa_filter_norm data frame by the sum of all elements in the same column in the asv data frame. This should now correctly normalize the ASV counts for each peat soil sample in the asv_taxa_filter data frame based on the total counts in the asv data frame and store the result in the asv_taxa_filter_norm data frame.
+
+#The reason for normalizing the original ASV data is to account for differences in sequencing depth between the samples. Different samples may have different total counts, which could affect the comparison of microbial communities. By normalizing the counts, you ensure that all samples are comparable on the same scale.
+```
+
+
+
+```{r MOB ASV to long, warning=FALSE}
+# Convert data in sheet ASV_Taxa_Filter to long, join with Metadata, and summarize.
+asv_taxa_filter_long <- asv_taxa_filter_norm %>%
+  gather(key = "sample_name", value = "me_count", Floeg094:Floeg104, TF001:TF022) %>%
+  left_join(metadata, by = "sample_name") %>%
+  mutate(Percentage = me_count * 100)
+```
+
+
+
+
+
+```{r Group by Phylum}
+#Group and summarize data by site layer and Phylum
+
+percentage_data_Phylum <- asv_taxa_filter_long %>%
+  dplyr::select(sample_name, Phylum, Percentage) %>%
+  group_by(sample_name, Phylum) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Phylum) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Phylum, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Phylum$Code_treat <- factor(percentage_data_Phylum$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Phylum.
+plot1 <- ggplot(percentage_data_Phylum, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Phylum, fill = Phylum)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 40))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot1)
+
+ggsave("Phylum_Plot.svg", height = 30, width = 100, units = "cm")
+```
+
+
+
+```{r group by Class}
+
+#Group and summarize data by site layer and Class
+
+percentage_data_Class <- asv_taxa_filter_long %>%
+  dplyr::select(sample_name, Class, Percentage) %>%
+  group_by(sample_name, Class) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Class) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Class, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Class$Code_treat <- factor(percentage_data_Class$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Class.
+plot2 <- ggplot(percentage_data_Class, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Class, fill = Class)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot2)
+
+ggsave("Class_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+```
+
+
+
+```{r group by Order}
+
+# Group and summarize data by site layer and Order
+
+percentage_data_Order <- asv_taxa_filter_long %>%
+  dplyr::select(sample_name, Order, Percentage) %>%
+  group_by(sample_name, Order) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Order) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Order, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Order$Code_treat <- factor(percentage_data_Order$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Order.
+plot3 <- ggplot(percentage_data_Order, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Order, fill = Order)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot3)
+
+ggsave("Order_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+```
+
+
+
+```{r Group by Family}
+# Group and summarize data by site layer and family
+
+percentage_data_Family <- asv_taxa_filter_long %>%
+  dplyr::select(sample_name, Family, Percentage) %>%
+  group_by(sample_name, Family) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Family) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Family, digits = 4)
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Family$Code_treat <- factor(percentage_data_Family$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Family.
+plot4 <- ggplot(percentage_data_Family, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Family, fill = Family)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot4)
+
+ggsave("Family_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+```
+
+
+
+```{r Group by Genus}
+
+# Group and summarize data by site layer and Genus
+
+percentage_data_Genus <- asv_taxa_filter_long %>%
+  dplyr::select(sample_name, Genus, Percentage) %>%
+  group_by(sample_name, Genus) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat,site_desc, Genus) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Genus, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Genus$Code_treat <- factor(percentage_data_Genus$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Genus.
+plot5 <- ggplot(percentage_data_Genus, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Genus, fill = Genus)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot5)
+
+ggsave("Genus_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+
+
+my_palette <- c("#D55E00", "#E69F00", "#009E73", "#F01442", "#000000", "#CC79A7", "#00FFFF", "#999FFF", "#911199", "#444FFC", "#99FF55", "#999999", "#FF11CC")
+
+
+plot6 <- ggplot(percentage_data_Genus, aes(x = Code_treat, y = mean_Percentage, fill = Genus, color = Genus)) +
+  geom_col() +
+  scale_fill_manual(values = my_palette[1:13]) +
+  scale_color_manual(values = my_palette[1:13]) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50"))
+
+print(plot6)
+
+ggsave("Genus_Plot22.svg", height = 80, width = 100, units = "cm")
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Genus$Code_treat <- factor(percentage_data_Genus$Code_treat, levels = c("FENpI", "FENpT1","FENpT3", "FENpT4", "SSFT1", "FENpT2", "SSFI", "SSFT2",  "SSFT3",  "SSFT4"))
+mycolors <- colorRampPalette(brewer.pal(name = "Paired", n = 12))(13)
+
+plot6_1 <- ggplot(percentage_data_Genus, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(fill = reorder(Genus, mean_Percentage), color = Genus)) +
+  scale_fill_manual(values = mycolors) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme_classic() +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50")) #+ facet_wrap(site_desc~Code_treat)
+
+print(plot6_1)
+
+
+
+
+
+ggsave("Genus_Plot22_2.svg", height = 80, width = 100, units = "cm")
+
+
+
+
+
+
+
+
+library(kableExtra)
+# Group and summarize data by site layer and Genus
+
+percentage_data_Genus <- asv_taxa_filter_long %>%
+  dplyr::select(sample_name, Genus, Percentage) %>%
+  group_by(sample_name, Genus) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat,site_desc, Genus) %>%
+  #dplyr::summarize(mean_Percentage = mean(sum_Percentage), sd_Percentage = sd(sum_Percentage), replicate_number = n()) %>%
+  #mutate(se_Percentage = sd_Percentage/sqrt(replicate_number)) %>%
+  mutate(Code_treat_Genus = paste(Code_treat, Genus, sep = "_")) %>%
+  filter(!is.na(sum_Percentage) & sum_Percentage != 0) %>%  # Remove rows with empty or 0 mean_Percentage
+  filter(Genus == "KS41") %>%
+  aov(sum_Percentage ~ (Code_treat_Genus),  .) -> # fit an anova model
+  aov_t0
+
+summary(aov_t0) 
+# print results
+
+
+TukeyHSD(aov_t0) 
+
+
+tukey_results <- capture.output(TukeyHSD(aov_t0))
+kbl(tukey_results, digits = 4)
+
+```
+
+
+
+```{r Indicator Species Analysis}
+
+# Save the reshaped and transposed data frame as ISA_asv_taxa_filter_t
+ISA_asv_taxa_filter <- asv_taxa_filter %>%
+  select(ASV, 2:28)
+
+# Transpose the reshaped data frame
+ISA_asv_taxa_filter_t <- as.data.frame(t(ISA_asv_taxa_filter[-1]))
+colnames(ISA_asv_taxa_filter_t) <- ISA_asv_taxa_filter$ASV
+
+# Run the multipatt() function
+indval <- multipatt(ISA_asv_taxa_filter_t, metadata$site_desc,
+                    control = how(nperm=999))
+
+# Save the summary of indval in indval_summary
+summary(indval)
+
+# Get summary information and capture output
+
+output <- capture.output(summary(indval))
+
+# Write output to file
+writeLines(output, "Species_Perc_summary.txt")
+
+```
+
+
+
+
+
+## ** MOB β-diversity indices**
+
+*Distance based matrices such as Bray-Curtis, Unifrac are commonly used and visualized using ordination methods.* 
+*Note: The Multidimensionnal Scaling (PCoA) or Principal Coordinates Analysis (PCoA) *
+
+```{r MOB β-diversity indices, cache = T}
+# Read in data from file
+
+library("phyloseq")
+# load library
+library(ggordiplots)
+
+# Load the bacterial abundance table and metadata
+ASV_table1 <- read_ods("Metadata_ASV_Taxa.ods", sheet = "ASV_Filter", col_names = TRUE, as_tibble = FALSE, row_names = T, strings_as_factors = T)
+Taxa_table1 <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Taxa_Filter", col_names = TRUE, as_tibble = FALSE, row_names = T, strings_as_factors = T)
+Peat_metadata1 <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Metadata", col_names = TRUE, as_tibble = FALSE, row_names = T, strings_as_factors = T)
+
+asv_table1 <- as.matrix(ASV_table1)
+taxa_table1 <- as.matrix(Taxa_table1)
+
+# Create a phyloseq object
+OTU1 <- otu_table(asv_table1, taxa_are_rows = TRUE)
+TAX1 <- tax_table(taxa_table1)
+sample1 <- sample_data(Peat_metadata1)
+
+carbom1 <- merge_phyloseq(OTU1, TAX1, sample1)
+carbom1
+
+
+
+# Assume "carbom" is your merged phyloseq object
+# Execute prevalence filter, using `prune_taxa()` function
+carbom_pruned1 <- prune_taxa(taxa_sums(carbom1) > 0, carbom1)
+
+
+
+#*Normalize number of reads in each sample using median sequencing depth.*
+total = median(sample_sums(carbom_pruned1))
+standf = function(x, t=total) round(t * (x / sum(x)))
+carbom_pruned1 = transform_sample_counts(carbom_pruned1, standf)
+
+
+
+
+
+# Perform NMDS ordination
+GP.ord <- ordinate(carbom_pruned1, "NMDS", "bray", k = 3)
+#GP.ord <- ordinate(carbom_pruned1, "PCoA", "bray")
+# Note the stress value
+GP.ord$stress
+
+p11 <- plot_ordination(carbom_pruned1, GP.ord, type="samples", color="Code_treat", shape="site_desc") + 
+       geom_point(size=20) + 
+       annotate("text", x=-0.5, y=0.4, size = 10, label=paste("stress =", round(GP.ord$stress, 4))) +
+       theme(axis.text=element_text(size=40),
+             axis.title=element_text(size=40),
+             legend.text=element_text(size=40),
+             legend.title=element_text(size=40),
+             plot.title=element_text(size=40))
+
+print(p11)
+
+ggsave("MOB_anaerobic_Ordination_Plot.svg", height = 60, width = 100, units = "cm")
+
+
+
+p111 = plot_ordination(carbom_pruned1, GP.ord, type="sample", color="Code_treat", shape="site_desc") + theme_bw()
+p111 + stat_ellipse(geom = "polygon", type="norm", alpha=0.4, aes(fill=Code_treat))
+
+
+
+
+my_palette <- c("#D55E00", "#E69F00", "#009E73", "#F01442", "#000000", "#CC79A7", "#00FFFF", "#999FFF", "#911199", "#444FFC", "#99FF55", "#999999", "#FF11CC")
+
+
+my_palette <- c("#D55E00", "#009E73", "#F01442", "#FFFF55", "#FF11CC", "#D55E00", "#009E73", "#F01442", "#FFFF55", "#FF11CC")
+
+p12 <- plot_ordination(carbom_pruned1, GP.ord, type = "samples", color = "Code_treat", shape = "site_desc") + 
+       geom_point(size = 20) + 
+       annotate("text", x = -0.5, y = 0.4, size = 10, label = paste("stress =", round(GP.ord$stress, 4))) +
+       theme(axis.text = element_text(size = 40),
+             axis.title = element_text(size = 40),
+             legend.text = element_text(size = 40),
+             legend.title = element_text(size = 40),
+             plot.title = element_text(size = 40)) +
+       scale_fill_manual(values = my_palette[1:13]) +
+       scale_color_manual(values = my_palette[1:13]) + facet_wrap(~site_desc, nrow=1)
+
+print(p12)
+
+ggsave("Anaerobic_MOB_Ordination_Plot.svg", height = 60, width = 100, units = "cm")
+
+
+
+
+
+
+
+
+
+library(vegan)
+library(factoextra)
+library(ggforce)
+
+
+# Read the metadata and ASV filter data
+metadata <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Metadata")
+asv_filter <- read_ods("Metadata_ASV_Taxa.ods", sheet = "ASV_Filter")
+
+# Normalize all ASV for each peat soil sample in asv_taxa_filter using asv sums
+asv_filter_norm <- asv_filter
+for (col_name in names(asv_filter_norm)[2:28]) {
+  asv_filter_norm[[col_name]] <- asv_taxa_filter_norm[[col_name]] / sum(asv[[col_name]])
+}
+
+
+# Remove the 'ASV' column from asv_filter to prepare it for merging
+asv_filter_long <- asv_filter_norm %>%
+  pivot_longer(-ASV, names_to = "sample_name", values_to = "me_count")
+
+# Merge the long-format ASV data with metadata based on 'sample_name'
+merged_data <- left_join(asv_filter_long, metadata, by = "sample_name") %>%
+  filter(me_count != 0) #%>%
+  #filter(site_desc %in% c("SSF")) %>%
+  #filter(!grepl("SSFT1|SSFT2|SSFT3", Code_treat))
+  #filter(site_desc %in% c("SSF")) %>%
+  #filter(!grepl("SSFT1|SSFT2|SSFT3|SSFT4|FENpT1|FENpT2|FENpT3|FENpT4", Code_treat))   # Remove rows with "SSF" in Code_treat
+
+# Create a dissimilarity matrix using Bray-Curtis dissimilarity
+diss_matrix <- vegdist(merged_data$me_count, method = "bray")
+
+#=====================================================================================
+
+library(ggforce)
+
+
+
+
+
+
+
+#=====================================================================================
+# Group variable for ANOSIM
+group_variable <- merged_data$Code_treat
+
+# Perform ANOSIM
+anosim_result <- anosim(diss_matrix, group_variable)
+
+# Perform Adonis (PERMANOVA)
+adonis_result <- adonis2(diss_matrix ~ Code_treat, data = merged_data)
+
+# Print the ANOSIM result
+cat("ANOSIM Result:\n")
+print(anosim_result)
+
+# Print the Adonis result
+cat("\nAdonis (PERMANOVA) Result:\n")
+print(adonis_result)
+
+
+
+
+
+nmds <- metaMDS(diss_matrix)
+
+# Plot the NMDS results
+plot(nmds, type = "t")  # "n" to create an empty plot first
+points(nmds, col = merged_data$site_desc)  # Color by site description
+
+# Add labels to the points if needed
+text(nmds, labels = rownames(merged_data), cex = 0.8)
+
+```
+
+
+
+
+
+
+
+
+```{r Read the files2.}
+# Analyze all microbial community
+
+# Read the files.
+metadata <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Metadata")
+
+asv <- read_ods("Metadata_ASV_Taxa.ods", sheet = "ASV")
+
+Taxa <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Taxa")
+
+```
+
+
+
+
+```{r Normalize2}
+# Normalize all ASV for each peat soil sample.
+# normalize the ASV data by dividing each count by the total count for each sample (column-wise)
+asv_norm <- asv
+for (col_name in names(asv_norm)[2:28]) {
+  asv_norm[[col_name]] <- asv_norm[[col_name]] / sum(asv_norm[[col_name]])
+}
+
+
+asv_taxa_norm <- merge(asv_norm, Taxa, by = "ASV")
+
+```
+
+
+
+```{r ASV to long2, warning=FALSE}
+# Convert data in sheet ASV to long, join with Metadata, and summarize.
+# Assuming your data frames are named metadata, asv_norm
+
+# Convert data in sheet ASV to long format using pivot_longer function
+asv_taxa_norm_long <- asv_taxa_norm %>%
+  pivot_longer(cols = Floeg094:TF022, names_to = "sample_name", values_to = "Total_count")
+
+# Join it with data in sheet Metadata using sample_name
+asv_taxa_norm_long_joined <- asv_taxa_norm_long %>%
+  left_join(metadata, by = "sample_name") %>%
+  mutate(Percentage = Total_count * 100)
+
+```
+
+
+
+
+
+
+```{r All microbial Group by Phylum}
+#Group and summarize data by site layer and Phylum
+
+percentage_data_All_Phylum <- asv_taxa_norm_long_joined%>%
+  dplyr::select(sample_name, Phylum, Percentage) %>%
+  group_by(sample_name, Phylum) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Phylum) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_All_Phylum, digits = 4)
+
+
+  
+# Select the top 10 Phyla based on mean relative abundance across all samples
+top_phyla <- percentage_data_All_Phylum %>%
+  group_by(Phylum) %>%
+  filter(mean_Percentage > 1)
+
+# Filter the data to keep only the top Phyla
+percentage_data_All_Phylum_filtered <- percentage_data_All_Phylum %>%
+  filter(Phylum %in% top_phyla$Phylum)
+
+# Arrange the sample_name variable according to the desired order
+percentage_data_All_Phylum_filtered$Code_treat <- factor(percentage_data_All_Phylum_filtered$Code_treat, levels = c("FENpI", "FENpT1", "FENpT2", "FENpT3","FENpT4","SSFI", "SSFT1", "SSFT2","SSFT3", "SSFT4"))
+
+my_palette <- c(
+  "#FF00FF", "#FF0000", "#000000", "#008B8B", "#FFC0CB", "#00008B", "#F0F8FF", "#8B008B",
+  "#DC143C", "#C0C0C0", "#00FFFF", "#556B2F", "#C71585", "#FFFF00", "#0000FF"
+)  
+
+
+# Create the plot by Phylum.
+plot11_1 <- ggplot(percentage_data_All_Phylum_filtered, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Phylum, fill = Phylum)) +
+ scale_fill_manual(values = my_palette[1:21]) +
+  scale_color_manual(values = my_palette[1:21]) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50"))
+
+print(plot11_1)
+
+ggsave("All_Top_Phylum_Plot.svg", height = 50, width = 100, units = "cm")
+
+mycolors <- colorRampPalette(brewer.pal(name = "Paired", n = 12))(24)
+
+# Create the plot by Phylum.
+plot11_2 <- ggplot(percentage_data_All_Phylum_filtered, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(fill = reorder(Phylum, mean_Percentage), color = Phylum)) +
+ scale_fill_manual(values = mycolors) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50"))
+
+print(plot11_2)
+
+ggsave("All_Top_Phylum_Plot_22.svg", height = 50, width = 100, units = "cm")
+```
+
+
+
+
+```{r All microbial Group by Genus}
+#Group and summarize data by site layer and Genus
+
+percentage_data_All_Genus <- asv_taxa_norm_long_joined%>%
+  dplyr::select(sample_name, Genus, Percentage) %>%
+  group_by(sample_name, Genus) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Genus) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+kbl(percentage_data_All_Genus, digits = 4)
+
+
+
+top_genera <- percentage_data_All_Genus %>%
+  group_by(Genus) %>%
+  filter(mean_Percentage > 1)
+
+# Filter the data to keep only the top Phyla
+percentage_data_All_Genus_filtered <- percentage_data_All_Genus %>%
+  filter(Genus %in% top_genera$Genus)
+
+# Arrange the sample_name variable according to the desired order
+percentage_data_All_Genus_filtered$Code_treat <- factor(percentage_data_All_Genus_filtered$Code_treat, levels = c("FENpI", "FENpT1", "FENpT2", "FENpT3","FENpT4","SSFI", "SSFT1", "SSFT2","SSFT3", "SSFT4"))
+
+# Create the plot by Genus.
+
+
+my_palette1 <- c(
+  
+"#556B2F", "#8B0000", "#000000", "#008B8B", "#C71585", "#666600", "#00008B", "#4B0082", "#8B008B",
+"#2E8B57", "#DC143C", "#696969", "#5F9EA0", "#FF1493", "#FFFF00", "#0000FF", "#8A2BE2", "#FF00FF",
+"#98FB98", "#FF6347", "#C0C0C0", "#00FFFF", "#FF69B4", "#FFFF99", "#1E90FF", "#6495ED", "#EE82EE",
+"#7CFC00", "#FF0000", "#ffffff", "#E0FFFF", "#FFC0CB", "#FFFFCC", "#ADD8E6", "#F0F8FF", "#D8BFD8")
+
+
+my_palette <- c(
+  "#556B2F", "#FF0000", "#000000", "#008B8B", "#FFC0CB", "#666600", "#00008B", "#F0F8FF", "#8B008B",
+  "#7CFC00", "#DC143C", "#C0C0C0", "#00FFFF", "#C71585", "#FFFF00", "#ADD8E6", "#8A2BE2", "#FF00FF",
+  "#ffffff", "#FFFFCC", "#0000FF"
+)  
+
+
+plot12 <- ggplot(percentage_data_All_Genus_filtered, aes(x = Code_treat, y = mean_Percentage, fill = reorder(Genus, mean_Percentage), color = Genus)) +
+  geom_col() +
+ scale_fill_manual(values = my_palette[1:21]) +
+  scale_color_manual(values = my_palette[1:21]) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50"))
+
+print(plot12)
+
+ggsave("All_Top_Genera_Plot1.svg", height = 30, width = 100, units = "cm")
+
+
+mycolors <- colorRampPalette(brewer.pal(name = "Paired", n = 12))(55)
+
+plot12_1 <- ggplot(percentage_data_All_Genus_filtered, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(fill = reorder(Genus, mean_Percentage), color = Genus)) +
+ scale_fill_manual(values = mycolors) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50"))
+
+print(plot12_1)
+
+
+ggsave("All_Top_Genera_Plot22.svg", height = 50, width = 100, units = "cm")
+
+```
+
+
+
+## **β-diversity indices**
+
+*Distance based matrices such as Bray-Curtis, Unifrac are commonly used and visualized using ordination methods.* 
+*Note: The Multidimensionnal Scaling (PCoA) or Principal Coordinates Analysis (PCoA) *
+```{r All microbial β-diversity indices, cache = T}
+# Read in data from file
+# Load the bacterial abundance table and metadata
+ASV_table <- read_ods("Metadata_ASV_Taxa.ods", sheet = "ASV", col_names = TRUE, row_names = T, strings_as_factors = T)
+Taxa_table <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Taxa", col_names = TRUE, row_names = T, strings_as_factors = T)
+Peat_metadata <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Metadata", col_names = TRUE, row_names = T, strings_as_factors = T)
+
+asv_table <- as.matrix(ASV_table)
+taxa_table <- as.matrix(Taxa_table)
+
+# Create a phyloseq object
+OTU <- otu_table(asv_table, taxa_are_rows = TRUE)
+TAX <- tax_table(taxa_table)
+sample <- sample_data(Peat_metadata)
+
+carbom <- merge_phyloseq(OTU, TAX, sample)
+carbom
+
+# Assume "carbom" is your merged phyloseq object
+# Execute prevalence filter, using `prune_taxa()` function
+carbom_pruned <- prune_taxa(taxa_sums(carbom) > 0, carbom)
+
+
+#*Normalize number of reads in each sample using median sequencing depth.*
+total = median(sample_sums(carbom_pruned))
+standf = function(x, t=total) round(t * (x / sum(x)))
+carbom_pruned = transform_sample_counts(carbom_pruned, standf)
+
+
+GP.ord <- ordinate(carbom_pruned, "NMDS", "bray")
+p1 = plot_ordination(carbom_pruned, GP.ord, type="samples", color="Code_treat", shape="site_desc") + geom_point(size=50) + 
+       annotate("text", x=-0.4, y=0.57, size = 20, label=paste("stress =", round(GP.ord$stress, 4))) +
+       theme(axis.text=element_text(size=40),
+             axis.title=element_text(size=40),
+             legend.text=element_text(size=40),
+             legend.title=element_text(size=40),
+             plot.title=element_text(size=40))
+
+print(p1)
+ggsave("All_anaerobic_Microbial3_Ordination_Plot.svg", height = 50, width = 100, units = "cm")
+
+
+
+my_palette <- c("#D55E00", "#009E73", "#F01442", "#FFFF55", "#FF11CC", "#D55E00", "#009E73", "#F01442", "#FFFF55", "#FF11CC")
+
+p120 <- plot_ordination(carbom_pruned, GP.ord, type = "samples", color = "Code_treat", shape = "site_desc") + 
+       geom_point(size = 50) + 
+       annotate("text", x = 1, y = 1, size = 10, label = paste("stress =", round(GP.ord$stress, 4))) +
+       theme(axis.text = element_text(size = 40),
+             axis.title = element_text(size = 40),
+             legend.text = element_text(size = 40),
+             legend.title = element_text(size = 40),
+             plot.title = element_text(size = 40)) +
+       scale_fill_manual(values = my_palette[1:13]) +
+       scale_color_manual(values = my_palette[1:13])
+
+print(p120)
+
+ggsave("All_anaerobic_Microbial_Ordination2_Plot.svg", height = 80, width = 100, units = "cm")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# For Archaea
+
+
+```{r Read the files.}
+# 1. Read the files.
+metadata <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Metadata")
+asv <- read_ods("Metadata_ASV_Taxa.ods", sheet = "ASV")
+Archaea <- read_ods("Metadata_ASV_Taxa.ods", sheet = "Archaea")
+```
+
+
+```{r Normalize}
+# Normalize all ASV for each peat soil sample.
+# normalize the ASV data by dividing each count by the total count for each sample (column-wise)
+asv_norm <- asv
+for (col_name in names(asv_norm)[2:28]) {
+  asv_norm[[col_name]] <- asv_norm[[col_name]] / sum(asv_norm[[col_name]])
+}
+
+# Normalize all ASV for each peat soil sample in Archaea using asv sums
+Archaea_norm <- Archaea
+for (col_name in names(Archaea_norm)[2:28]) {
+  Archaea_norm[[col_name]] <- Archaea_norm[[col_name]] / sum(asv[[col_name]])
+}
+
+#In this script, we first create a copy of the Archaea data frame called Archaea_norm. Then, we use a for loop to iterate through the column names from Floeg093 to Floeg104. For each column, we divide each element in the Archaea_norm data frame by the sum of all elements in the same column in the asv data frame. This should now correctly normalize the ASV counts for each peat soil sample in the Archaea data frame based on the total counts in the asv data frame and store the result in the Archaea_norm data frame.
+
+#The reason for normalizing the original ASV data is to account for differences in sequencing depth between the samples. Different samples may have different total counts, which could affect the comparison of microbial communities. By normalizing the counts, you ensure that all samples are comparable on the same scale.
+```
+
+
+
+```{r MOB ASV to long, warning=FALSE}
+# Convert data in sheet Archaea to long, join with Metadata, and summarize.
+Archaea_long <- Archaea_norm %>%
+  gather(key = "sample_name", value = "me_count", Floeg094:Floeg104, TF001:TF022) %>%
+  left_join(metadata, by = "sample_name") %>%
+  mutate(Percentage = me_count * 100)
+```
+
+
+
+
+
+```{r Group by Phylum}
+#Group and summarize data by site layer and Phylum
+
+percentage_data_Phylum <- Archaea_long %>%
+  dplyr::select(sample_name, Phylum, Percentage) %>%
+  group_by(sample_name, Phylum) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Phylum) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Phylum, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Phylum$Code_treat <- factor(percentage_data_Phylum$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Phylum.
+plot1 <- ggplot(percentage_data_Phylum, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Phylum, fill = Phylum)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 40))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot1)
+
+ggsave("Archaea_Phylum_Plot.svg", height = 30, width = 100, units = "cm")
+```
+
+
+
+```{r group by Class}
+
+#Group and summarize data by site layer and Class
+
+percentage_data_Class <- Archaea_long %>%
+  dplyr::select(sample_name, Class, Percentage) %>%
+  group_by(sample_name, Class) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Class) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Class, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Class$Code_treat <- factor(percentage_data_Class$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Class.
+plot2 <- ggplot(percentage_data_Class, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Class, fill = Class)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot2)
+
+ggsave("Archaea_Class_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+```
+
+
+
+```{r group by Order}
+
+# Group and summarize data by site layer and Order
+
+percentage_data_Order <- Archaea_long %>%
+  dplyr::select(sample_name, Order, Percentage) %>%
+  group_by(sample_name, Order) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Order) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Order, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Order$Code_treat <- factor(percentage_data_Order$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Order.
+plot3 <- ggplot(percentage_data_Order, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Order, fill = Order)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot3)
+
+ggsave("Archaea_Order_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+```
+
+
+
+```{r Group by Family}
+# Group and summarize data by site layer and family
+
+percentage_data_Family <- Archaea_long %>%
+  dplyr::select(sample_name, Family, Percentage) %>%
+  group_by(sample_name, Family) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat, Family) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Family, digits = 4)
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Family$Code_treat <- factor(percentage_data_Family$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Family.
+plot4 <- ggplot(percentage_data_Family, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Family, fill = Family)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot4)
+
+ggsave("Archaea_Family_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+```
+
+
+
+```{r Group by Genus}
+
+# Group and summarize data by site layer and Genus
+
+percentage_data_Genus <- Archaea_long %>%
+  dplyr::select(sample_name, Genus, Percentage) %>%
+  group_by(sample_name, Genus) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat,site_desc, Genus) %>%
+  dplyr::summarize(mean_Percentage = mean(sum_Percentage), .groups = 'drop')    
+  kbl(percentage_data_Genus, digits = 4)
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Genus$Code_treat <- factor(percentage_data_Genus$Code_treat, levels = c("FENpI", "SSFI", "FENpT1", "SSFT1", "FENpT2", "SSFT2", "FENpT3", "SSFT3", "FENpT4", "SSFT4"))
+
+# Create the plot by Genus.
+plot5 <- ggplot(percentage_data_Genus, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(color = Genus, fill = Genus)) +
+  ylab("Relative Abundance (%)") +
+  theme(text = element_text(size = 40)) +
+  theme(axis.text = element_text(size = 30))
+# with position = "fill", the bars are normalized so that they represent relative abundance (percentages) within each environment:
+print(plot5)
+
+ggsave("Archaea_Genus_Plot.svg", height = 30, width = 100, units = "cm")
+
+
+
+
+my_palette <- c("#D55E00", "#E69F00", "#009E73", "#F01442", "#000000", "#CC79A7", "#00FFFF", "#999FFF", "#911199", "#444FFC", "#99FF55", "#999999", "#FF11CC")
+
+my_palette1 <- c(
+  
+"#556B2F", "#8B0000", "#000000", "#008B8B", "#C71585", "#666600", "#00008B", "#4B0082", "#8B008B",
+"#2E8B57", "#DC143C", "#696969", "#5F9EA0", "#FF1493", "#FFFF00", "#0000FF", "#8A2BE2", "#FF00FF",
+"#98FB98", "#FF6347", "#C0C0C0", "#00FFFF", "#FF69B4", "#FFFF99", "#1E90FF", "#6495ED", "#EE82EE",
+"#7CFC00", "#FF0000", "#ffffff", "#E0FFFF", "#FFC0CB", "#FFFFCC", "#ADD8E6", "#F0F8FF", "#D8BFD8")
+
+
+plot6 <- ggplot(percentage_data_Genus, aes(x = Code_treat, y = mean_Percentage, fill = Genus, color = Genus)) +
+  geom_col() +
+  scale_fill_manual(values = my_palette[1:24]) +
+  scale_color_manual(values = my_palette[1:24]) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50"))
+
+print(plot6)
+
+ggsave("Archaea_Genus_Plot22.svg", height = 80, width = 100, units = "cm")
+
+
+# Arrange the Code_treat variable according to the desired order
+percentage_data_Genus$Code_treat <- factor(percentage_data_Genus$Code_treat, levels = c("FENpI", "FENpT1","FENpT3", "FENpT4", "SSFT1", "FENpT2", "SSFI", "SSFT2",  "SSFT3",  "SSFT4"))
+mycolors <- colorRampPalette(brewer.pal(name = "Paired", n = 12))(13)
+
+plot6_1 <- ggplot(percentage_data_Genus, aes(x = Code_treat, y = mean_Percentage)) +
+  geom_col(aes(fill = reorder(Genus, mean_Percentage), color = Genus)) +
+  scale_fill_manual(values = mycolors) +
+  ylab("Relative Abundance (%)") +
+  theme(axis.text = element_text(size = 40)) +
+  theme_classic() +
+  theme(panel.border = element_blank(),
+        text = element_text(size = 40),
+        panel.background = element_rect(fill = "white", colour = "grey50")) #+ facet_wrap(site_desc~Code_treat)
+
+print(plot6_1)
+
+
+
+
+
+ggsave("Genus_Plot22_2.svg", height = 80, width = 100, units = "cm")
+
+
+
+
+
+
+
+
+library(kableExtra)
+# Group and summarize data by site layer and Genus
+
+percentage_data_Genus <- Archaea_long %>%
+  dplyr::select(sample_name, Genus, Percentage) %>%
+  group_by(sample_name, Genus) %>%
+  dplyr::summarize(sum_Percentage = sum(Percentage), .groups = 'drop') %>% 
+  left_join(metadata, by = "sample_name") %>%                             
+  group_by(Code_treat,site_desc, Genus) %>%
+  #dplyr::summarize(mean_Percentage = mean(sum_Percentage), sd_Percentage = sd(sum_Percentage), replicate_number = n()) %>%
+  #mutate(se_Percentage = sd_Percentage/sqrt(replicate_number)) %>%
+  mutate(Code_treat_Genus = paste(Code_treat, Genus, sep = "_")) %>%
+  filter(!is.na(sum_Percentage) & sum_Percentage != 0) %>%  # Remove rows with empty or 0 mean_Percentage
+  filter(Genus == "KS41") %>%
+  aov(sum_Percentage ~ (Code_treat_Genus),  .) -> # fit an anova model
+  aov_t0
+
+summary(aov_t0) 
+# print results
+
+
+TukeyHSD(aov_t0) 
+
+
+tukey_results <- capture.output(TukeyHSD(aov_t0))
+kbl(tukey_results, digits = 4)
+
+```
